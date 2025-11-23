@@ -324,7 +324,7 @@ single_player_df.sort_values(by='average_forever', ascending=False)[['name','dev
 single_player_df.sort_values(by='median_forever', ascending=False)[['name','developer','publisher','median_forever','average_forever','owners_mid','Co-Op (h)']].head(10)
 
 # %%
-multiplayer_df.sort_values(by='average_forever', ascending=False)[['name','developer','publisher','median_forever','average_forever','owners_mid','']].head(10)
+multiplayer_df.sort_values(by='average_forever', ascending=False)[['name','developer','publisher','median_forever','average_forever','owners_mid']].head(10)
 
 # %%
 multiplayer_df.sort_values(by='median_forever', ascending=False).head(10)
@@ -366,14 +366,382 @@ campaign_single_player_df = campaign_single_player_df[~is_counter_strike]
 campaign_single_player_df.sort_values(by='average_campaign_beaten',ascending=False)[['name','developer','publisher','average_campaign_beaten','Main Story (h)','average_forever','median_forever']].head(10)
 
 # %%
-
-
-# %%
 short_campaign_single_player_df = single_player_df[single_player_df['average_campaign_beaten'] <= 6]
 short_campaign_single_player_df.sort_values(by='average_campaign_beaten',ascending=False).head(10)[['name','developer','publisher','Main Story (h)','average_campaign_beaten']]
 
 # %%
 short_campaign_single_player_df = single_player_df[single_player_df['average_campaign_beaten'] <= 1]
 short_campaign_single_player_df.sort_values(by='average_campaign_beaten',ascending=False).head(10)[['name','developer','publisher','Main Story (h)','average_campaign_beaten']]
+
+# %% [markdown]
+# <span style="color: red"> Part 4: Hypothesis Testing </span>
+# <br><br>
+# Now that we have some good data, let us explore some interesting hypothesis questions. While we do not have enough entries to create proper predictions (e.g via a model), we nonetheless can try and get some semblance of an idea of the characteristics that more engaging games tend to posess.
+
+# %% [markdown]
+# <span style="color:pink; font-weight: bold;">
+# Question 1: Do multiplayer games really have more engagement than single player games?
+# </span> 
+# <br><br>
+# We can see this using the Mann-Whitney U Test:  
+
+# %%
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import pandas as pd
+import numpy as np
+
+# --- 1. Statistical Testing ---
+
+# We check 'average_forever' first
+sp_avg = single_player_df['average_forever']
+mp_avg = multiplayer_df['average_forever']
+
+# Mann-Whitney U Test (Non-parametric, good for skewed data)
+# Alternative='less' implies we are testing if SP is LESS than MP (i.e., MP is greater)
+stat, p_value = stats.mannwhitneyu(sp_avg, mp_avg, alternative='less')
+
+print(f"--- Statistical Test Results (Average Playtime) ---")
+print(f"Single Player Mean: {sp_avg.mean():.2f} hours")
+print(f"Multiplayer Mean:   {mp_avg.mean():.2f} hours")
+print(f"Mann-Whitney U statistic: {stat}")
+print(f"P-value: {p_value:.5f}")
+
+if p_value < 0.05:
+    print("Result: Significant! Multiplayer games have statistically higher engagement.")
+else:
+    print("Result: Not significant. No statistical difference found.")
+
+# --- 2. Visualization ---
+
+# Combine data for plotting
+# We add a 'Type' column to distinguish them in the plot
+single_player_df['Game Type'] = 'Single Player'
+multiplayer_df['Game Type'] = 'Multiplayer'
+
+combined_plot_df = pd.concat([single_player_df, multiplayer_df])
+
+# Create the plots
+fig, ax = plt.subplots(1, 2, figsize=(16, 6))
+
+# Plot A: Box Plot of Average Playtime
+sns.boxplot(x='Game Type', y='average_forever', data=combined_plot_df, ax=ax[0], palette="Set2")
+ax[0].set_title('Distribution of Average Playtime')
+ax[0].set_ylabel('Average Hours Played')
+ax[0].set_yscale('log') # Log scale is CRITICAL here to see the data clearly
+ax[0].grid(True, which="both", ls="-", alpha=0.2)
+
+# Plot B: Box Plot of Median Playtime (Often a more "honest" metric)
+sns.boxplot(x='Game Type', y='median_forever', data=combined_plot_df, ax=ax[1], palette="Set2")
+ax[1].set_title('Distribution of Median Playtime')
+ax[1].set_ylabel('Median Hours Played')
+ax[1].set_yscale('log')
+ax[1].grid(True, which="both", ls="-", alpha=0.2)
+
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# <span style="color: pink; font-weight: bold;">
+# Qustion 2:Social Accountability: Do games with co-op mechanics result in higher campaign completion rates than pure single-player games?
+# </span>
+# <br><br>
+# We can test this by first splitting games into co-op (greater than 0 co-op hours) and non-co-op (0 co-op hours) and testing:
+
+# %%
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import pandas as pd
+
+# --- 1. Data Prep ---
+# (Assuming 'single_player_df' is already loaded from your previous steps)
+
+# Filter for games with meaningful campaigns (> 4 hours)
+df_analysis = single_player_df[single_player_df['Main Story (h)'] > 4].copy()
+
+# Calculate the Ratio
+df_analysis['completion_ratio'] = df_analysis['average_forever'] / df_analysis['Main Story (h)']
+
+# Define Groups
+df_analysis['has_coop'] = df_analysis['Co-Op (h)'].fillna(0) > 0
+group_pure_sp = df_analysis[df_analysis['has_coop'] == False]['completion_ratio']
+group_coop = df_analysis[df_analysis['has_coop'] == True]['completion_ratio']
+
+# Create a Label column for the plot
+df_analysis['Category'] = df_analysis['has_coop'].map({True: 'Has Co-Op', False: 'Pure Single Player'})
+
+# --- 2. The Calculation (T-Test) ---
+# We use "Welch's T-Test" (equal_var=False) because one group might be more variable than the other.
+# 'alternative=greater' checks if Co-Op is GREATER than Pure SP.
+t_stat, p_value = stats.ttest_ind(group_coop, group_pure_sp, equal_var=False, alternative='greater')
+
+print(f"--- T-Test Results ---")
+print(f"Pure Single Player Mean Ratio: {group_pure_sp.mean():.2f}")
+print(f"Co-Op Enabled Mean Ratio:      {group_coop.mean():.2f}")
+print(f"T-Statistic: {t_stat:.2f}")
+print(f"P-value: {p_value:.5f}")
+
+if p_value < 0.05:
+    print("Result: Significant! Co-Op games have a higher mean completion ratio.")
+else:
+    print("Result: Not significant.")
+
+# --- 3. The Visualization (Histogram) ---
+plt.figure(figsize=(12, 6))
+
+# We use stat='density' to normalize the bars. 
+# Without this, the 'Pure SP' bars would be huge and 'Co-Op' tiny just because there are more SP games.
+sns.histplot(
+    data=df_analysis, 
+    x='completion_ratio', 
+    hue='Category', 
+    element='step',     # 'step' makes it look like an outline/transparent overlap
+    stat='density',     # CRITICAL: Normalizes so we compare shapes, not counts
+    common_norm=False,  # Calculate density for each group separately
+    palette='Set1',
+    alpha=0.3
+)
+
+plt.title('Distribution of Campaign Completion Ratios', fontsize=14)
+plt.xlabel('Completion Ratio (Avg Playtime / Campaign Length)', fontsize=12)
+plt.xlim(0, 5) # Limit view to 0-5x ratio to hide extreme outliers
+plt.grid(axis='y', alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# But this is not enough! We want to also test if increasing the number of hours in the co-op column; i.e, do games with a larger co-op component have greater levels of player engagment?
+
+# %%
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy import stats
+
+# --- 1. Filter for Co-Op Games ---
+# We only want to analyze games that actually HAVE a co-op mode.
+# We use the 'single_player_df' because we are looking at "Single Player games with Co-Op elements"
+# (Make sure you have run the cell where you defined 'average_campaign_beaten' first!)
+
+coop_analysis_df = single_player_df[
+    (single_player_df['Co-Op (h)'] > 0) & 
+    (single_player_df['average_campaign_beaten'] < 10) # Filter extreme outliers (>10x playtime) for cleaner plots
+].copy()
+
+# --- 2. The Statistical Test (Spearman Correlation) ---
+# We use Spearman because playtimes are rarely linear/normal
+corr_coef, p_value = stats.spearmanr(coop_analysis_df['Co-Op (h)'], coop_analysis_df['average_campaign_beaten'])
+
+print(f"--- Correlation Analysis: Length of Co-Op vs. Engagement ---")
+print(f"Spearman Correlation Coefficient: {corr_coef:.3f}")
+print(f"P-value: {p_value:.5f}")
+
+if p_value < 0.05:
+    if corr_coef > 0:
+        print("Result: Significant POSITIVE correlation. More Co-Op content links to higher engagement ratios.")
+    else:
+        print("Result: Significant NEGATIVE correlation.")
+else:
+    print("Result: No significant correlation found.")
+
+# --- 3. Visualization (Regression Plot) ---
+plt.figure(figsize=(10, 6))
+
+# Regplot draws the scatter points AND a trend line (regression line)
+sns.regplot(
+    x='Co-Op (h)', 
+    y='average_campaign_beaten', 
+    data=coop_analysis_df, 
+    scatter_kws={'alpha':0.5}, # Make dots transparent to see density
+    line_kws={'color':'red'}   # Trend line color
+)
+
+plt.title(f'Does More Co-Op Content = Higher Engagement?\n(Spearman Corr: {corr_coef:.2f})', fontsize=14)
+plt.xlabel('Hours of Co-Op Content (HLTB)', fontsize=12)
+plt.ylabel('Engagement Ratio (Avg Playtime / Main Story)', fontsize=12)
+plt.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# Therfore, we can funnily conclude that while having co-op features in a game does indeed increase player engagment, the *amount* of co-op features or their length may not have a special effect. Meaning players value the features themselves, rather than how 'meaty' they are.
+
+# %% [markdown]
+# <span style="color: pink; font-weight: bold;">
+# The Distraction Effect: Does a high ratio of side content to main story length negatively correlate with main story completion rates?
+# </span>
+
+# %%
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import pandas as pd
+import numpy as np
+
+# --- 1. Data Prep (Assumes single_player_df is loaded) ---
+# Filter for meaningful campaigns
+df_distraction = single_player_df[single_player_df['Main Story (h)'] > 4].copy()
+
+# Calculate Variables
+df_distraction['bloat_ratio'] = (df_distraction['Main + Sides (h)'] - df_distraction['Main Story (h)']) / df_distraction['Main Story (h)']
+df_distraction['completion_ratio'] = df_distraction['average_forever'] / df_distraction['Main Story (h)']
+
+# Clean up
+df_distraction = df_distraction[
+    (df_distraction['bloat_ratio'] >= 0) & 
+    (df_distraction['completion_ratio'] < 6)
+]
+
+# Categorize
+median_bloat = df_distraction['bloat_ratio'].median()
+df_distraction['Bloat Category'] = np.where(
+    df_distraction['bloat_ratio'] > median_bloat, 'High Bloat', 'Low Bloat'
+)
+
+group_high = df_distraction[df_distraction['Bloat Category'] == 'High Bloat']['completion_ratio']
+group_low = df_distraction[df_distraction['Bloat Category'] == 'Low Bloat']['completion_ratio']
+
+# --- 2. Advanced Statistics ---
+# A. T-Test
+t_stat, p_val = stats.ttest_ind(group_high, group_low, equal_var=False)
+
+# B. Cohen's d (Effect Size)
+# Formula: (Mean1 - Mean2) / Pooled Standard Deviation
+n1, n2 = len(group_high), len(group_low)
+var1, var2 = np.var(group_high, ddof=1), np.var(group_low, ddof=1)
+pooled_se = np.sqrt(((n1 - 1) * var1 + (n2 - 1) * var2) / (n1 + n2 - 2))
+cohens_d = (group_high.mean() - group_low.mean()) / pooled_se
+
+# C. Confidence Interval (95%)
+ci_low = group_low.mean() - 1.96 * (group_low.std() / np.sqrt(n2))
+ci_high = group_low.mean() + 1.96 * (group_low.std() / np.sqrt(n2))
+
+# --- 3. The "Fun" Report ---
+print(f"--- 🎮 THE BLOAT REPORT 🎮 ---")
+print(f"Total Games Analyzed: {len(df_distraction)}")
+print(f"The 'Bloat Line' (Median): {median_bloat:.2f} (Games above this are 'Stuffed')")
+print(f"\n--- The Scoreboard ---")
+print(f"Focused Games Completion: {group_low.mean():.2f}x of campaign length")
+print(f"Stuffed Games Completion: {group_high.mean():.2f}x of campaign length")
+print(f"\n--- The Verdict ---")
+print(f"T-Statistic: {t_stat:.2f}")
+print(f"P-Value: {p_val:.2e}")
+print(f"Cohen's d (Effect Size): {cohens_d:.2f}")
+
+if cohens_d > 0.5:
+    effect_text = "MEDIUM to LARGE effect! (Players definitely notice)"
+elif cohens_d > 0.2:
+    effect_text = "SMALL effect. (Noticeable but not huge)"
+else:
+    effect_text = "NEGLIGIBLE effect."
+
+print(f"Analysis: {effect_text}")
+if p_val < 0.05:
+    print("Conclusion: MYTH BUSTED! 🚨 Bloated games actually keep players longer!")
+else:
+    print("Conclusion: PLAUSIBLE. Bloat might actually be boring.")
+
+# --- 4. Annotated Visualization ---
+plt.figure(figsize=(12, 7))
+
+sns.histplot(
+    data=df_distraction, 
+    x='completion_ratio', 
+    hue='Bloat Category', 
+    element='step',     
+    stat='density',     
+    common_norm=False, 
+    kde=True,
+    palette='viridis',
+    alpha=0.15
+)
+
+# Add Text Annotation directly on plot
+stats_text = (
+    f"T-Stat: {t_stat:.2f}\n"
+    f"P-Value: {p_val:.1e}\n"
+    f"Cohen's d: {cohens_d:.2f}\n"
+    f"Effect: {effect_text.split('!')[0]}"
+)
+plt.text(
+    x=3.5, y=0.4, 
+    s=stats_text, 
+    bbox=dict(facecolor='white', alpha=0.8, edgecolor='black', boxstyle='round,pad=0.5'),
+    fontsize=11
+)
+
+plt.title('The Distraction Effect: Do "Bloated" Games Get Finished?\n(With Statistical Annotations)', fontsize=14)
+plt.xlabel('Completion Ratio (Avg Playtime / Main Story)', fontsize=12)
+plt.xlim(0, 5)
+plt.grid(axis='y', alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# <span style="color: pink; font-weight: bold;">
+# Question 4: The Whale Indicator: Do multiplayer games exhibit a significantly larger skew between average and median playtime than single-player games?
+# </span>
+
+# %%
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import pandas as pd
+import numpy as np
+
+# --- 1. Data Prep ---
+# (Assumes single_player_df and multiplayer_df are loaded)
+
+# Calculate Skew Ratio: (Average - Median) / Median
+single_player_df['whale_skew'] = (single_player_df['average_forever'] - single_player_df['median_forever']) / single_player_df['median_forever']
+multiplayer_df['whale_skew'] = (multiplayer_df['average_forever'] - multiplayer_df['median_forever']) / multiplayer_df['median_forever']
+
+# --- 2. Statistical Test ---
+sp_skew = single_player_df['whale_skew']
+mp_skew = multiplayer_df['whale_skew']
+
+stat, p_val = stats.mannwhitneyu(mp_skew, sp_skew, alternative='greater')
+
+print(f"--- 🐋 THE WHALE INDICATOR 🐋 ---")
+print(f"Single Player Median Skew: {sp_skew.median():.2f}")
+print(f"Multiplayer Median Skew:   {mp_skew.median():.2f}")
+print(f"P-Value: {p_val:.2e}")
+
+# --- 3. Visualization (Histogram) ---
+# Combine for plotting
+plot_df = pd.concat([
+    pd.DataFrame({'Skew Ratio': sp_skew, 'Genre': 'Single Player'}),
+    pd.DataFrame({'Skew Ratio': mp_skew, 'Genre': 'Multiplayer'})
+])
+
+# For the histogram, we focus on the "normal" range (0 to 5) so the plot isn't squashed.
+# (There are outliers with skew > 20, but they make the graph unreadable)
+plot_df_clean = plot_df[plot_df['Skew Ratio'] < 5]
+
+plt.figure(figsize=(10, 6))
+
+sns.histplot(
+    data=plot_df_clean, 
+    x='Skew Ratio', 
+    hue='Genre', 
+    element='step',     # Outline style (cleaner overlap)
+    stat='density',     # Normalize bars to compare shapes
+    common_norm=False, 
+    kde=True,           # Add the smooth line
+    palette='Set2',
+    alpha=0.3
+)
+
+plt.title('The Whale Indicator: Playtime Skew Distribution', fontsize=14)
+plt.xlabel('Skew Ratio ((Avg - Med) / Med)', fontsize=12)
+plt.ylabel('Density of Games', fontsize=12)
+plt.grid(axis='y', alpha=0.3)
+
+plt.tight_layout()
+plt.show()
 
 
