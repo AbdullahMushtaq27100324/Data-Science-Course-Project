@@ -200,6 +200,9 @@ df = df[df['median_forever'] >= MEDIAN_PLAYTIME_THRESHOLD]
 df = df[df['average_forever'] >= AVERAGE_PLAYTIME_THRESHOLD]
 print(f"Rows after filtering:  {len(df)}")
 
+# %%
+df.sort_values(by='average_forever',ascending=False)
+
 # %% [markdown]
 # <span style="color: #445E80; font-weight: bold;">Among Us </span>
 
@@ -214,22 +217,6 @@ df[df['name'] == 'Among Us']
 
 # %% [markdown]
 # 
-
-# %% [markdown]
-# <span style="color: pink; font-weight: bold;">
-# 
-# Hypothesis testing: top 75% of median playtime players will play full game + sides
-# 
-# Hypothesis testing: co-op games have higher average campaign beaten than non-co-op
-# 
-# </span>
-# 
-# t_statistic, p_value = stats.ttest_ind(
-#     coop_games, 
-#     no_coop_games,
-#     alternative='greater',  # One-tailed: co-op > no co-op
-#     equal_var=False  # Welch's t-test (doesn't assume equal variance)
-# )
 
 # %% [markdown]
 # <span style="color: red; font-weight: bold;">Analysis Section </span>
@@ -321,7 +308,7 @@ print("Export complete: all_filtered_games.csv, single_player_games.csv, multipl
 single_player_df.sort_values(by='average_forever', ascending=False)[['name','developer','publisher','median_forever','average_forever','owners_mid']].head(10)
 
 # %%
-single_player_df.sort_values(by='median_forever', ascending=False)[['name','developer','publisher','median_forever','average_forever','owners_mid','Co-Op (h)']].head(10)
+single_player_df.sort_values(by='median_forever', ascending=False)[['name','developer','publisher','median_forever','average_forever','owners_mid','Co-Op (h)','Vs (h)']].head(10)
 
 # %%
 multiplayer_df.sort_values(by='average_forever', ascending=False)[['name','developer','publisher','median_forever','average_forever','owners_mid']].head(10)
@@ -349,9 +336,6 @@ single_player_df.head(2)
 single_player_df = single_player_df[single_player_df['Main Story (h)'] > 4]
 
 # %%
-
-
-# %%
 single_player_df['average_campaign_beaten'] = single_player_df['average_forever']/single_player_df['Main Story (h)']
 single_player_df['median_campaign_beaten'] = single_player_df['median_forever']/single_player_df['Main Story (h)']
 single_player_df.sort_values(by='average_campaign_beaten',ascending=False).head(10)[['name','developer','publisher','average_campaign_beaten','Main Story (h)','average_forever','average_campaign_beaten','median_campaign_beaten']]
@@ -372,6 +356,21 @@ short_campaign_single_player_df.sort_values(by='average_campaign_beaten',ascendi
 # %%
 short_campaign_single_player_df = single_player_df[single_player_df['average_campaign_beaten'] <= 1]
 short_campaign_single_player_df.sort_values(by='average_campaign_beaten',ascending=False).head(10)[['name','developer','publisher','Main Story (h)','average_campaign_beaten']]
+
+# %% [markdown]
+# <span style='color: red'>For a final output:</span>
+
+# %%
+multiplayer_df.sort_values(by='average_forever', ascending=False).head(10)
+
+# %%
+multiplayer_df.sort_values(by='median_forever', ascending=False).head(10)
+
+# %%
+single_player_df.sort_values(by='average_campaign_beaten',ascending=False).head(10)
+
+# %%
+single_player_df.sort_values(by='median_campaign_beaten', ascending=False).head(10)
 
 # %% [markdown]
 # <span style="color: red"> Part 4: Hypothesis Testing </span>
